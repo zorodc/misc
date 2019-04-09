@@ -177,7 +177,7 @@ procedure Convert is
 		  elsif Bit_Vect >= 2** 8 then 16
 		  else                          8);
 
-	   function Twos_Compliment (Unsigned: in Bit_Pattern) return Signed_Bits is
+	   function Twos_Complement (Unsigned: in Bit_Pattern) return Signed_Bits is
 		  H_O_B  :constant Bit_Pattern := +(2**(Next_Word_Width(Unsigned) -1));
 		  Is_Set :constant Boolean     :=  (Unsigned >= H_O_B); -- Is HOB set?
 		  Weight :constant Signed_Bits := -(Signed_Bits(H_O_B-1))-1;
@@ -185,10 +185,10 @@ procedure Convert is
 		 (if Is_Set
 			then Signed_Bits(Unsigned - H_O_B) + Weight
 			else Signed_Bits(Unsigned));
-	   end Twos_Compliment;
+	   end Twos_Complement;
 
-       function Ones_Compliment (Unsigned: in Bit_Pattern) return Signed_Bits is
-		  TWC :constant Signed_Bits := Twos_Compliment (Unsigned);
+       function Ones_Complement (Unsigned: in Bit_Pattern) return Signed_Bits is
+		  TWC :constant Signed_Bits := Twos_Complement (Unsigned);
 	   begin return (if TWC < 0 then TWC+1 else TWC); end;
 
 begin
@@ -216,7 +216,7 @@ begin
    Print_As_Base (Formatted, End_Idx, Bit_Value, 10);
    Ada.Text_IO.Put_Line("Dec: "& String(Formatted (1 .. End_Idx)));
 
-   Ada.Text_IO.Put_Line("TsC: "& Signed_Bits'Image(Twos_Compliment(Bit_Value)));
-   Ada.Text_IO.Put_Line("OsC: "& Signed_Bits'Image(Ones_Compliment(Bit_Value)));
+   Ada.Text_IO.Put_Line("TsC: "& Signed_Bits'Image(Twos_Complement(Bit_Value)));
+   Ada.Text_IO.Put_Line("OsC: "& Signed_Bits'Image(Ones_Complement(Bit_Value)));
 
 end Convert;
