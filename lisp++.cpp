@@ -207,10 +207,6 @@ static std::ostream& operator<<(std::ostream& o, const lisp::Val& v)
 
 /*
  * Functions for use in the language itself, and a hash table to hold them.
- *
- * At the moment, all the functions defined in Lang are coupled with Lang.
- * That is, they assume Lang is the operant namespace in use.
- * In the future they could be decoupled by giving them the namespace as an arg.
  */
 
 namespace func {
