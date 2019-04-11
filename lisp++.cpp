@@ -100,8 +100,8 @@ namespace func {
 /*
  * METAPROGRAMMING
  */
-
 namespace meta {
+
 	/* A type to allow template parameter T of _pack::operator() to be deduced. */
 	template <unsigned N> struct proxy { enum { value = N }; };
 
@@ -154,7 +154,6 @@ namespace meta {
 /*
  * Helpers for defining functions, using the metaprograming stuff.
  */
-
 namespace def {
 
 	/* Used for defining functions which control their evaluation order. */
@@ -208,7 +207,6 @@ static std::ostream& operator<<(std::ostream& o, const lisp::Val& v)
 /*
  * Functions for use in the language itself, and a hash table to hold them.
  */
-
 namespace func {
 	inline auto Last(lisp::Val lv) {
 		auto l = std::get<lisp::Ptr>(lv);
@@ -269,8 +267,8 @@ namespace func {
 				try {
 					for (auto it = pairs; it != lisp::Nil;
 					          it = std::get<lisp::Ptr>(lisp::Cdr(it))) {
-						auto elm = lisp::Car(it);
-						auto metav = Fst(elm), sexpr = Snd(elm);
+						auto lpair = lisp::Car(it);
+						auto metav = Fst(lpair), sexpr = Snd(lpair);
 						auto bound = lisp::Eval(sexpr, newns);
 						newns[std::get<0>(std::get<lisp::Sym>(metav))] = bound;
 					}
