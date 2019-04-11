@@ -69,7 +69,7 @@ procedure Convert is
          Low_Ord_Val : Numerals;
          I           : Positive range 1 .. Bit_StrIdx'Last+1 := Out_Buf'First;
       begin
-		 -- Loops at least once, for the case that the input was 0.
+         -- Loops at least once, for the case that the input was 0.
          while Decumulator /= 0 or I = Out_Buf'First loop
             Low_Ord_Val := Numerals(Decumulator mod Base);
             Decumulator :=          Decumulator  /  Base;
@@ -96,7 +96,7 @@ procedure Convert is
          when others => null;
       end case;
 
-	  -- Write value.
+      -- Write value.
       Format_Val (Out_Buf (Offset+1 .. Out_Buf'Last), End_Idx, Numeral, Base);
    end Print_As_Base;
 
@@ -148,16 +148,16 @@ procedure Convert is
 
    -- Parses a literal with an optional sign.
    procedure Parse_SignedL (Literal : in  String;
-							Parsed  : out Bit_Pattern;
-							Error   : out Boolean) is
-	  V : Bit_Pattern := 0;
+                            Parsed  : out Bit_Pattern;
+                            Error   : out Boolean) is
+      V : Bit_Pattern := 0;
    begin
-	  if Literal (Literal'First) in '-' | '+'
-	  then Parse_Literal (Literal (Literal'First+1 .. Literal'Last), V, Error);
-	  else Parse_Literal (Literal, V, Error);
-	  end if;
+      if Literal (Literal'First) in '-' | '+'
+      then Parse_Literal (Literal (Literal'First+1 .. Literal'Last), V, Error);
+      else Parse_Literal (Literal, V, Error);
+      end if;
 
-	  Parsed := V * (if Literal (Literal'First) = '-' then (-1) else (+1));
+      Parsed := V * (if Literal (Literal'First) = '-' then (-1) else (+1));
    end Parse_SignedL;
 
    ---------------
@@ -170,26 +170,26 @@ procedure Convert is
    Bit_Value : Bit_Pattern;
    Formatted : Bit_String;
 
-	   -- Next power of two that exists as a possible word size. --
-	   function Next_Word_Width (Bit_Vect: in Bit_Pattern) return Positive is
-		  (if   Bit_Vect >= 2**32 then 64
-		  elsif Bit_Vect >= 2**16 then 32
-		  elsif Bit_Vect >= 2** 8 then 16
-		  else                          8);
+       -- Next power of two that exists as a possible word size. --
+       function Next_Word_Width (Bit_Vect: in Bit_Pattern) return Positive is
+          (if   Bit_Vect >= 2**32 then 64
+          elsif Bit_Vect >= 2**16 then 32
+          elsif Bit_Vect >= 2** 8 then 16
+          else                          8);
 
-	   function Twos_Complement (Unsigned: in Bit_Pattern) return Signed_Bits is
-		  H_O_B  :constant Bit_Pattern := +(2**(Next_Word_Width(Unsigned) -1));
-		  Is_Set :constant Boolean     :=  (Unsigned >= H_O_B); -- Is HOB set?
-		  Weight :constant Signed_Bits := -(Signed_Bits(H_O_B-1))-1;
-	   begin return
-		 (if Is_Set
-			then Signed_Bits(Unsigned - H_O_B) + Weight
-			else Signed_Bits(Unsigned));
-	   end Twos_Complement;
+       function Twos_Complement (Unsigned: in Bit_Pattern) return Signed_Bits is
+          H_O_B  :constant Bit_Pattern := +(2**(Next_Word_Width(Unsigned) -1));
+          Is_Set :constant Boolean     :=  (Unsigned >= H_O_B); -- Is HOB set?
+          Weight :constant Signed_Bits := -(Signed_Bits(H_O_B-1))-1;
+       begin return
+         (if Is_Set
+            then Signed_Bits(Unsigned - H_O_B) + Weight
+            else Signed_Bits(Unsigned));
+       end Twos_Complement;
 
        function Ones_Complement (Unsigned: in Bit_Pattern) return Signed_Bits is
-		  TWC :constant Signed_Bits := Twos_Complement (Unsigned);
-	   begin return (if TWC < 0 then TWC+1 else TWC); end;
+          TWC :constant Signed_Bits := Twos_Complement (Unsigned);
+       begin return (if TWC < 0 then TWC+1 else TWC); end;
 
 begin
 
