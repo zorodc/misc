@@ -50,7 +50,7 @@ namespace lisp {
 	using  Val = std::variant<bool, Int, Sym, Str, Ptr, LFn>;
 
 	using Namespace = std::unordered_map<std::string, Val>;
-	struct Cel { Val Car, Cdr; Cel(Val a, Val d) : Car{a}, Cdr{d} {} };
+	struct Cel { Val Car, Cdr; Cel(Val ca, Val cd) : Car{ca}, Cdr{cd} {} };
 	struct FNS { std::function<Val(Ptr, Namespace&, Ptr)> evl; Ptr body; };
 
 	namespace exceptions {
@@ -93,34 +93,97 @@ namespace lisp {
 namespace func {
 	inline auto Fst(lisp::Val c){return     lisp::Car(std::get<lisp::Ptr>(c)); }
 	inline auto Snd(lisp::Val c){return Fst(lisp::Cdr(std::get<lisp::Ptr>(c)));}
+	inline auto Nth(lisp::Val c, unsigned N) {
+		while (N--) c = lisp::Cdr(std::get<lisp::Ptr>(c));
+		return Fst (c);
+	}
 }
 
 /*
- * Utils for defining builtin functions.
+ * METAPROGRAMMING
  */
 
-namespace lisp {
-	inline LFn MkFunc(
-		std::function<Val(Ptr, Namespace&, Ptr)> fn, Ptr body = lisp::Nil) {
+namespace meta {
+	/* A type to allow template parameter T of _pack::operator() to be deduced. */
+	template <unsigned N> struct proxy { enum { value = N }; };
+
+	/* Instantiate template R with a parameter pack of N different T args. */
+	template <typename T, template <typename...> class R, typename... Ts>
+	struct pack {
+		template <unsigned N> auto operator()(proxy<N> = {}) {
+			if constexpr (N) return pack<T,R,Ts...,T>{}(proxy<N-1>{});
+			else             return        R<Ts...  >();
+		}
+	};
+
+	template <typename... Ts>
+	struct unwrapper {
+		template <typename FN> auto untyped(FN fn, lisp::Ptr args) {
+			unsigned i = sizeof...(Ts);
+			return fn( Ts{func::Nth(args, --i)}... );
+		}
+
+		template <typename FN> auto checked(FN fn, lisp::Ptr args) {
+			unsigned i = sizeof...(Ts);
+			return fn( std::get<Ts>(func::Nth(args, --i))... );
+		}
+	};
+
+
+	template <typename T, typename... Ts>
+	struct last_of_pack { using type = typename last_of_pack<Ts...>::type; };
+	template <typename Last> struct last_of_pack<Last>{ using type = Last; };
+
+	/*
+	 * Call a function w/ some lisp::Val arguments contained in a lisp list.
+	 */
+	template <unsigned Arity, typename FN>
+	auto Untyped_Dispatch(FN fn, lisp::Ptr args) {
+		return pack<lisp::Val, unwrapper>{}(proxy<Arity>{}).untyped(fn, args);
+	}
+
+	/*
+	 * Call a function w/ some typed arguments contained in a lisp list.
+	 */
+	template <unsigned Arity, typename... Ts>
+	auto Checked_Dispatch(auto fn, lisp::Ptr args) {
+		using last_type  = typename last_of_pack<Ts...>::type;
+		const auto Addnl = Arity - sizeof...(Ts);
+		return pack<last_type, unwrapper, Ts...>{}(proxy<Addnl>{}).checked(fn, args);
+	}
+}
+
+/*
+ * Helpers for defining functions, using the metaprograming stuff.
+ */
+
+namespace def {
+
+	/* Used for defining functions which control their evaluation order. */
+	inline lisp::LFn Builtin(
+		 std::function<lisp::Val(lisp::Ptr, lisp::Namespace&, lisp::Ptr)> fn,
+		 lisp::Ptr body = lisp::Nil) {
+		using namespace lisp;
 		return std::make_shared<FNS>(FNS{fn, std::move(body)});
 	}
 
-	template <typename FN>
-	LFn MkWeakOp(FN fn) {
-		return MkFunc([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) -> lisp::Val {
-			auto ev = Eval_List(args, n);
-			try { return lisp::Val(fn(func::Fst(ev), func::Snd(ev))); } catch (...)
-			    { throw lisp::exceptions::wrong_type{}; }
+	/* TODO: Some kind of variadic form? (Defined w/ a foldl or something...) */
+	// TODO: N optional ret from Eval_List + check arity here.
+	template <unsigned Arity, typename FN>
+	lisp::LFn Untyped(FN fn) {
+		return Builtin([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
+		    auto ev = Eval_List(args, n);
+		    try { return lisp::Val{meta::Untyped_Dispatch<Arity>(fn, ev)}; }
+		    catch (...) { throw lisp::exceptions::wrong_type{}; }
 		});
 	}
 
-
-	template <typename T1, typename T2 = T1, typename FN>
-	LFn MkTypedOp(FN fn) {
-		return MkWeakOp([=](lisp::Val a, lisp::Val b) {
-			lisp::check::TAG<T1>(a);
-			lisp::check::TAG<T2>(b);
-			return fn(std::get<T1>(a), std::get<T2>(b));
+	template <unsigned Arity, typename... Ts>
+	lisp:: LFn Checked(auto fn) {
+		return Builtin([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
+			auto ev = Eval_List(args, n);
+			try { return lisp::Val{meta::Checked_Dispatch<Arity, Ts...>(fn, ev)}; }
+			catch (...) { throw lisp::exceptions::wrong_type{}; }
 		});
 	}
 }
@@ -169,19 +232,22 @@ namespace func {
 	}
 
 	lisp::Namespace Lang = {
-		{{"true" }, true },
-		{{"false"}, false},
+		{{"true" },  true               },
+		{{"false"}, false               },
+		{{"nil"  }, lisp::Val{lisp::Nil}},
 
-		{{"cons"}, lisp::MkWeakOp([](lisp::Val x, lisp::Val y) {
+		{{"car" }, def::Checked<1, lisp::Ptr>([](lisp::Ptr c) { return lisp::Car(c); })},
+		{{"cdr" }, def::Checked<1, lisp::Ptr>([](lisp::Ptr c) { return lisp::Cdr(c); })},
+		{{"cons"}, def::Untyped<2>([](lisp::Val x, lisp::Val y) {
 					return lisp::Val{lisp::Cons(x, y)}; })},
 
-		{{"-"}, lisp::MkTypedOp<lisp::Int>([](lisp::Int x, lisp::Int y) { return x-y;  })},
-		{{"*"}, lisp::MkTypedOp<lisp::Int>([](lisp::Int x, lisp::Int y) { return x*y;  })},
-		{{"/"}, lisp::MkTypedOp<lisp::Int>([](lisp::Int x, lisp::Int y) { return x/y;  })},
-		{{"%"}, lisp::MkTypedOp<lisp::Int>([](lisp::Int x, lisp::Int y) { return x%y;  })},
-		{{"="}, lisp::MkWeakOp            ([](lisp::Val x, lisp::Val y) { return x==y; })},
+		{{"-"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x-y; })},
+		{{"*"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x*y; })},
+		{{"/"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x/y; })},
+		{{"%"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x%y; })},
+		{{"="}, def::Untyped<2> ([](lisp::Val x, lisp::Val y) { return x==y; })},
 
-		{{"+"}, lisp::MkFunc([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
+		{{"+"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
 			lisp::Int acc = 0;
 
 			try {
@@ -192,7 +258,7 @@ namespace func {
 			return lisp::Val{acc};
 		})},
 
-		{{"if"}, lisp::MkFunc([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
+		{{"if"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
 			auto testp = lisp::Car(arg);
 			try {
 				auto ifp = std::get   <lisp::Ptr>( lisp::Cdr(arg));
@@ -203,7 +269,7 @@ namespace func {
 			} catch (...) { throw lisp::exceptions::wrong_type{}; }
 		})},
 
-		{{"let"}, lisp::MkFunc([](lisp::Ptr lexpr, lisp::Namespace& n, lisp::Ptr _) {
+		{{"let"}, def::Builtin([](lisp::Ptr lexpr, lisp::Namespace& n, lisp::Ptr _) {
 			auto union_shadow = [&](lisp::Ptr pairs) -> lisp::Namespace {
 				auto newns = n;
 				try {
@@ -226,14 +292,14 @@ namespace func {
 			} catch (...) { throw lisp::exceptions::wrong_form{}; }
 		})},
 
-		{{"defun"}, lisp::MkFunc([](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
+		{{"defun"}, def::Builtin([](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
 			auto body = lisp::Cdr(args);
 
 			try {
 				auto alst =             std::get<lisp::Ptr>(lisp::Car(args));
 				auto name = std::get<0>(std::get<lisp::Sym>(lisp::Car(alst)));
 				auto mvar =             std::get<lisp::Ptr>(lisp::Cdr(alst));
-			    return n[name] = lisp::MkFunc(
+				return n[name] = def::Builtin(
 				    [=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr body) {
 						auto binds = func::Zip(mvar, args);
 						return lisp::Eval(lisp::Cons(lisp::Sym{"let"},
