@@ -28,8 +28,6 @@
  * There's still a lot to add, before this can be used for anything:
  * TODO: Quoting.
  * TODO: dot-cons-notation in input and output.
- * TODO: Generalize the Binary *Op util function into a similar N-aryOp func.
- * TODO: Provide Car and Cdr using the above.
  * TODO: Clean up some of the code a bit, wherever possible.
  * TODO: Make the exception handling a bit more robust.
  * TODO: Provide error messages whenever an exception is met.
