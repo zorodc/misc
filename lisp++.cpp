@@ -27,7 +27,7 @@
  *
  * There's still a lot to add, before this can be used for anything:
  * TODO: Quoting.
- * TODO: dot-cons-notation in input and output.
+ * TODO: dot-cons-notation in input.
  * TODO: Clean up some of the code a bit, wherever possible.
  * TODO: Make the exception handling a bit more robust.
  * TODO: Provide error messages whenever an exception is met.
@@ -52,12 +52,17 @@ namespace lisp {
 	struct FNS { std::function<Val(Ptr, Namespace&, Ptr)> evl; Ptr body; };
 
 	namespace exceptions {
+		/* Lexer exceptions. */
 		struct unexpected { char           which; };
 		struct badinteger { std::string_view bad; };
-		struct early_eofs { std::string_view bad; }; /* Early EOF.      */
-		struct nullp_args {                       }; /* An arg was Nil. */
-		struct wrong_type {                       }; /* Wrong type arg. */
-		struct wrong_form {                       }; /* Syntax error.   */
+		struct early_eofs { std::string_view bad; }; /* Early EOF. */
+
+
+		/* Eval exceptions. */
+		struct nullp_args { }; /* Arg was Nil when this wasn't appropriate.   */
+		struct wrong_type { }; /* Arg was of an unexpected type.              */
+		struct wrong_form { }; /* A special form's syntax wasn't adhered to.  */
+		struct wrong_acnt { }; /* Arity of a function call is incorrect.      */
 	}
 
 	namespace check {
@@ -81,11 +86,11 @@ namespace lisp {
 		return f->evl(a, n, f->body);
 	}
 
-	inline Ptr  Eval_List(Ptr args, Namespace& n) {
+	inline Ptr  Eval_List(Ptr args, Namespace& n, unsigned* c = nullptr) {
 		if (!args) return lisp::Nil;
-		return Cons(Eval(Car(args), n), Eval_List(std::get<Ptr>(Cdr(args)), n));
+		return Cons(Eval(Car(args), n),
+		            Eval_List(std::get<Ptr>(Cdr(args)), n, c ? (*c)++, c : c));
 	}
-
 }
 
 namespace func {
@@ -102,7 +107,7 @@ namespace func {
  */
 namespace meta {
 
-	/* A type to allow template parameter T of _pack::operator() to be deduced. */
+	/* A type to allow template parameter T of pack::operator() to be deduced. */
 	template <unsigned N> struct proxy { enum { value = N }; };
 
 	/* Instantiate template R with a parameter pack of N different T args. */
@@ -147,6 +152,7 @@ namespace meta {
 	auto Checked_Dispatch(auto fn, lisp::Ptr args) {
 		using last_type  = typename last_of_pack<Ts...>::type;
 		const auto Addnl = Arity - sizeof...(Ts);
+
 		return pack<last_type, unwrapper, Ts...>{}(proxy<Addnl>{}).checked(fn, args);
 	}
 }
@@ -169,7 +175,9 @@ namespace def {
 	template <unsigned Arity, typename FN>
 	lisp::LFn Untyped(FN fn) {
 		return Builtin([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
-		    auto ev = Eval_List(args, n);
+		    unsigned cnt = 0; auto ev = Eval_List(args, n, &cnt);
+
+		    if (cnt != Arity) throw lisp::exceptions::wrong_acnt{};
 		    try { return lisp::Val{meta::Untyped_Dispatch<Arity>(fn, ev)}; }
 		    catch (...) { throw lisp::exceptions::wrong_type{}; }
 		});
@@ -178,7 +186,9 @@ namespace def {
 	template <unsigned Arity, typename... Ts>
 	lisp:: LFn Checked(auto fn) {
 		return Builtin([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
-			auto ev = Eval_List(args, n);
+			unsigned cnt = 0; auto ev = Eval_List(args, n, &cnt);
+
+			if (cnt != Arity) throw lisp::exceptions::wrong_acnt{};
 			try { return lisp::Val{meta::Checked_Dispatch<Arity, Ts...>(fn, ev)}; }
 			catch (...) { throw lisp::exceptions::wrong_type{}; }
 		});
@@ -194,11 +204,15 @@ static std::ostream& operator<<(std::ostream& o, const lisp::Val& v)
 		else if constexpr (std::is_same_v<T, lisp::Sym>) o << std::get<0> (arg);
 		else if constexpr (std::is_same_v<T, lisp::Ptr>) {
 			o << '(';
-			for (auto p = &arg; p && *p;
-			          p = std::get_if<lisp::Ptr>(&lisp::Cdr(*p))) {
-				if (p != &arg) o << ' ';
+			const lisp::Ptr *lastelm = nullptr, *p;
+			for (p = &arg; p && *p; p = std::get_if<lisp::Ptr>(&lisp::Cdr(*p))) {
+				lastelm = p;
+				if  (p != &arg) o << ' ';
+
 				o << lisp::Car(*p);
 			}
+
+			if (!p && lastelm) o << " . " << lisp::Cdr(*lastelm);
 			o << ')';
 		} else o << arg; }, v);
 	return o;
@@ -224,31 +238,21 @@ namespace func {
 	}
 
 	lisp::Namespace Lang = {
-		{{"true" },  true               },
-		{{"false"}, false               },
-		{{"nil"  }, lisp::Val{lisp::Nil}},
+		{{"true"}, true},
+		{{"false"}, false},
+		{{"nil"}, lisp::Val{lisp::Nil}},
 
 		{{"car" }, def::Checked<1, lisp::Ptr>([](lisp::Ptr c) { return lisp::Car(c); })},
 		{{"cdr" }, def::Checked<1, lisp::Ptr>([](lisp::Ptr c) { return lisp::Cdr(c); })},
 		{{"cons"}, def::Untyped<2>([](lisp::Val x, lisp::Val y) {
 					return lisp::Val{lisp::Cons(x, y)}; })},
 
+		{{"+"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x+y; })},
 		{{"-"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x-y; })},
 		{{"*"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x*y; })},
 		{{"/"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x/y; })},
 		{{"%"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x%y; })},
 		{{"="}, def::Untyped<2> ([](lisp::Val x, lisp::Val y) { return x==y; })},
-
-		{{"+"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
-			lisp::Int acc = 0;
-
-			try {
-				for (auto ev = Eval_List(arg, n); ev != lisp::Nil;
-				          ev = std::get<lisp::Ptr>(lisp::Cdr(ev)))
-					acc += std::get<lisp::Int>(lisp::Car(ev));
-			} catch (...) { return lisp::Val{lisp::Nil}; }
-			return lisp::Val{acc};
-		})},
 
 		{{"if"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
 			auto testp = lisp::Car(arg);
@@ -392,7 +396,7 @@ lisp::Ptr lisp::Lexr (const lisp::Str& sexp)
 
 lisp::Val lisp::Eval (const lisp::Val& ast, lisp::Namespace& n) {
 	if (std::holds_alternative<Sym>(ast)) {
-		auto   it = n.find(std::get<0>(std::get<Sym>(ast)));
+		auto   it  = n.find(std::get<0>(std::get<Sym>(ast)));
 		return it != std::end(n) ? it->second : lisp::Nil; /* TODO: Change. */
 	}
 
@@ -406,10 +410,10 @@ lisp::Val lisp::Eval (const lisp::Ptr& ast, lisp::Namespace& n) {
 		else                                                  return Val{ Nil };
 	}, lisp::Car(ast));
 
-	try {
-		auto v = std::get<LFn>(fn);
-		return lisp::Call(v, n, std::get<Ptr>(lisp::Cdr(ast)));
-	} catch (...) { throw lisp::exceptions::wrong_type{}; }
+	auto vp = std::get_if<LFn>(&fn);
+	if (!vp) throw lisp::exceptions::wrong_type{}; /* TODO: Throw to indicate !callable. */
+
+	return lisp::Call(*vp, n, std::get<Ptr>(lisp::Cdr(ast)));
 }
 
 int main() {
@@ -421,6 +425,11 @@ int main() {
 		try { parsetree = lisp::Car(lisp::Lexr(expr)); } catch (...)
 		    { std::cerr << "Lexer error!\n"; continue; }
 
-		std::cout << lisp::Eval(parsetree, func::Lang) << '\n';
+		try   { std::cout << lisp::Eval(parsetree, func::Lang) << '\n'; }
+		catch (lisp::exceptions::wrong_form&) { std::cerr << "Bad form syntax.\n"; }
+		catch (lisp::exceptions::wrong_acnt&) { std::cerr << "Incorrect arity.\n"; }
+		catch (lisp::exceptions::wrong_type&) { std::cerr << "Incorrect types.\n"; }
+		catch (lisp::exceptions::nullp_args&) { std::cerr << "Incorrectly nil.\n"; }
+		catch (...)                           { std::cerr << "Some eval error.\n"; }
 	}
 }
