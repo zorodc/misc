@@ -252,6 +252,7 @@ namespace func {
 		{{"*"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x*y; })},
 		{{"/"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x/y; })},
 		{{"%"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x%y; })},
+		{{"<"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x<y; })},
 		{{"="}, def::Untyped<2> ([](lisp::Val x, lisp::Val y) { return x==y; })},
 
 		{{"if"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
