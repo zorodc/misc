@@ -193,7 +193,7 @@ procedure Convert is
 
 begin
 
-   Ada.Text_IO.Put_Line ("Provide a numeric value to convert.");
+   Ada.Text_IO.Put_Line ("Provide a bit pattern as a numeric literal.");
    Ada.Text_IO.Get_Line (Literal, End_Idx);
 
    Parse_SignedL (Literal (1 .. End_Idx), Bit_Value, Fmt_Error);
