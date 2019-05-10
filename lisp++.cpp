@@ -26,7 +26,6 @@
  * Additionally, one finds that compiler errors w/ std::variant are atrocious.
  *
  * There's still a lot to add, before this can be used for anything:
- * TODO: Quoting.
  * TODO: dot-cons-notation in input.
  * TODO: Clean up some of the code a bit, wherever possible.
  * TODO: Make the exception handling a bit more robust.
@@ -246,7 +245,6 @@ namespace func {
 		{{"cdr" }, def::Checked<1, lisp::Ptr>([](lisp::Ptr c) { return lisp::Cdr(c); })},
 		{{"cons"}, def::Untyped<2>([](lisp::Val x, lisp::Val y) {
 					return lisp::Val{lisp::Cons(x, y)}; })},
-
 		{{"+"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x+y; })},
 		{{"-"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x-y; })},
 		{{"*"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x*y; })},
@@ -255,7 +253,9 @@ namespace func {
 		{{"<"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x<y; })},
 		{{"="}, def::Untyped<2> ([](lisp::Val x, lisp::Val y) { return x==y; })},
 
-		{{"if"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
+		{{"quote"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
+					return Fst(arg); })},
+		{{"if"},    def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
 			auto testp = lisp::Car(arg);
 			try {
 				auto ifp = std::get   <lisp::Ptr>( lisp::Cdr(arg));
@@ -351,10 +351,6 @@ lisp::Ptr lisp::Lexr (const lisp::Str& sexp)
 		return lisp::Symbolize(sexp.substr(i, c-i));
 	};
 
-//	auto oquote = [&](size i, size& next) {
-//
-//	};
-
 	auto skipws = [&](size i, size& next) {
 		while (sexp[i] ==  ' ' ||
 		       sexp[i] == '\t' ||
@@ -363,6 +359,12 @@ lisp::Ptr lisp::Lexr (const lisp::Str& sexp)
 	};
 
 	std::function<lisp::Val(size i, size& next)> expr; /* "forward-decl" */
+
+	auto oquote = [&](size i, size& next) {
+		++next; return lisp::Cons(lisp::Sym("quote"),
+		               lisp::Cons(expr(i+1, next), lisp::Nil));
+	};
+
 	auto conses = [&](size i, size& next) {
 		expect(i++, '('); /* Sanity check. */
 
@@ -384,7 +386,7 @@ lisp::Ptr lisp::Lexr (const lisp::Str& sexp)
 		case '9': return intlit(i, next);
 		case '(': return conses(i, next);
 		case'\"': return strlit(i, next);
-//		case'\'': return oquote(i, next);
+		case'\'': return oquote(i, next);
 		default : return symbol(i, next);
 
 		/* Prevent inputs from being interpreted in odd ways. */
