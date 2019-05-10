@@ -169,8 +169,6 @@ namespace def {
 		return std::make_shared<FNS>(FNS{fn, std::move(body)});
 	}
 
-	/* TODO: Some kind of variadic form? (Defined w/ a foldl or something...) */
-	// TODO: N optional ret from Eval_List + check arity here.
 	template <unsigned Arity, typename FN>
 	lisp::LFn Untyped(FN fn) {
 		return Builtin([=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr _) {
