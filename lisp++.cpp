@@ -261,7 +261,7 @@ namespace func {
 				auto ifp = std::get   <lisp::Ptr>( lisp::Cdr(arg));
 				auto elp = std::get_if<lisp::Ptr>(&lisp::Cdr(ifp));
 				auto res = std::get<bool>(lisp::Eval(testp, n));
-				if (!res && elp) return lisp::Eval(lisp::Car(*elp), n);
+				if (!res && elp) return lisp::Eval(lisp::Car(*elp), n); // TODO: Poor exception use
 				else             return lisp::Eval(lisp::Car( ifp), n);
 			} catch (...) { throw lisp::exceptions::wrong_type{}; }
 		})},
@@ -274,7 +274,7 @@ namespace func {
 					          it = std::get<lisp::Ptr>(lisp::Cdr(it))) {
 						auto lpair = lisp::Car(it);
 						auto metav = Fst(lpair), sexpr = Snd(lpair);
-						auto bound = lisp::Eval(sexpr, newns);
+						auto bound = lisp::Eval(sexpr, newns); // TODO: Poor exception use
 						newns[std::get<0>(std::get<lisp::Sym>(metav))] = bound;
 					}
 				} catch (...) { throw lisp::exceptions::wrong_form{}; }
@@ -285,7 +285,7 @@ namespace func {
 			try {
 				auto n = union_shadow(std::get<lisp::Ptr>(lisp::Car(lexpr)));
 				return Last(lisp::Eval_List(
-					            std::get<lisp::Ptr>(lisp::Cdr(lexpr)), n));
+					            std::get<lisp::Ptr>(lisp::Cdr(lexpr)), n)); // TODO: Poor exception use
 			} catch (...) { throw lisp::exceptions::wrong_form{}; }
 		})},
 
@@ -301,7 +301,7 @@ namespace func {
 						auto binds = func::Zip(mvar, args);
 						return lisp::Eval(lisp::Cons(lisp::Sym{"let"},
 						                  lisp::Cons(binds, body)), n);
-					}, std::get<lisp::Ptr>(body));
+				    }, std::get<lisp::Ptr>(body)); // TODO: Poor exception use
 
 			} catch (...) { throw lisp::exceptions::wrong_form{}; }
 		})}
