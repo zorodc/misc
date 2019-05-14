@@ -67,7 +67,7 @@ namespace lisp {
 	namespace check {
 		template <class T>
 		inline void TAG(Val v) { if (!std::holds_alternative<T>(v))
-		                             throw exceptions::wrong_type{}; }
+		                                 throw exceptions::wrong_type{}; }
 		inline void NUL(Ptr p) { if (!p) throw exceptions::nullp_args{}; }
 	}
 
@@ -120,12 +120,12 @@ namespace meta {
 
 	template <typename... Ts>
 	struct unwrapper {
-		template <typename FN> auto untyped(FN fn, lisp::Ptr args) {
+		template <typename FN> auto untyped(FN fn, const lisp::Ptr& args) {
 			unsigned i = sizeof...(Ts);
 			return fn( Ts{func::Nth(args, --i)}... );
 		}
 
-		template <typename FN> auto checked(FN fn, lisp::Ptr args) {
+		template <typename FN> auto checked(FN fn, const lisp::Ptr& args) {
 			unsigned i = sizeof...(Ts);
 			return fn( std::get<Ts>(func::Nth(args, --i))... );
 		}
@@ -140,7 +140,7 @@ namespace meta {
 	 * Call a function w/ some lisp::Val arguments contained in a lisp list.
 	 */
 	template <unsigned Arity, typename FN>
-	auto Untyped_Dispatch(FN fn, lisp::Ptr args) {
+	auto Untyped_Dispatch(FN fn, const lisp::Ptr& args) {
 		return pack<lisp::Val, unwrapper>{}(proxy<Arity>{}).untyped(fn, args);
 	}
 
@@ -148,7 +148,7 @@ namespace meta {
 	 * Call a function w/ some typed arguments contained in a lisp list.
 	 */
 	template <unsigned Arity, typename... Ts>
-	auto Checked_Dispatch(auto fn, lisp::Ptr args) {
+	auto Checked_Dispatch(auto fn, const lisp::Ptr& args) {
 		using last_type  = typename last_of_pack<Ts...>::type;
 		const auto Addnl = Arity - sizeof...(Ts);
 
@@ -251,6 +251,10 @@ namespace func {
 		{{"<"}, def::Checked<2, lisp::Int>([](lisp::Int x, lisp::Int y) { return x<y; })},
 		{{"="}, def::Untyped<2> ([](lisp::Val x, lisp::Val y) { return x==y; })},
 
+		{{"eval"},  def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
+					return lisp::Call(def::Untyped<1>(
+					   [&](lisp::Val obj) { return lisp::Eval (obj, n); }), n, arg);
+				})},
 		{{"quote"}, def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
 					return Fst(arg); })},
 		{{"if"},    def::Builtin([](lisp::Ptr arg, lisp::Namespace& n, lisp::Ptr _) {
@@ -295,6 +299,7 @@ namespace func {
 				auto name = std::get<0>(std::get<lisp::Sym>(lisp::Car(alst)));
 				auto mvar =             std::get<lisp::Ptr>(lisp::Cdr(alst));
 				return n[name] = def::Builtin(
+					// TODO: Insert checks.
 				    [=](lisp::Ptr args, lisp::Namespace& n, lisp::Ptr body) {
 						auto binds = func::Zip(mvar, args);
 						return lisp::Eval(lisp::Cons(lisp::Sym{"let"},
@@ -417,12 +422,40 @@ lisp::Val lisp::Eval (const lisp::Ptr& ast, lisp::Namespace& n) {
 	return lisp::Call(*vp, n, std::get<Ptr>(lisp::Cdr(ast)));
 }
 
-int main() {
-	for (;;) {
-		std::string expr{}; getline(std::cin, expr);
-		if (!std::cin || expr == "exit") break;
+/* Read an expression by ensuring parens match, notifying a functor on line break. */
+template <typename FN>
+std::string naive_read_expr (std::istream& s, FN line_break_callback) {
+	unsigned op = 0,
+	         cp = 0;
+	std::string exp;
+	char        chr;
+	bool    saw_tok = false; /* Saw something other than whitespace? */
+	do {
+		exp  += (chr = s.get());
+		if (s.eof()) return exp;
 
-		lisp::Val parsetree = lisp::Nil;
+		saw_tok |= chr != ' ' && chr != '\t' && chr != '\n';
+		     if (chr == '(') ++op;
+		else if (chr == ')') ++cp;
+		else if (chr == '\n' && saw_tok) line_break_callback(op-cp);
+	} while (!saw_tok || op > cp);
+
+	/* Parse the remainder of the line. */
+	std::string tmp; std::getline(s, tmp);
+	exp += tmp;
+	return exp;
+}
+
+int main() {
+	for(;;) {
+		std::string expr = naive_read_expr(std::cin,
+			[] (unsigned d) {
+				std::cout << ">";
+				while (d--) std::cout << ' ';
+			});
+
+		if (!std::cin || expr == "exit") break;
+		lisp::Val parsetree;
 		try { parsetree = lisp::Car(lisp::Lexr(expr)); } catch (...)
 		    { std::cerr << "Lexer error!\n"; continue; }
 
