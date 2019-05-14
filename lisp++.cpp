@@ -41,6 +41,8 @@
  * TODO: Make the exception handling a bit more robust.
  * TODO: Provide error messages whenever an exception is met.
  *
+ * LICENSE:
+ *
  * This program is hereby placed in the public domain.
  *
  * If you live in a country which does not regcognize the above commission,
