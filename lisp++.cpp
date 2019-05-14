@@ -23,7 +23,17 @@
  * Therefore, whilst implementing lisp in Java might be easier, as one can
  *  leverage the garbage collector, std::shared_ptr offers some substitute.
  *
- * Additionally, one finds that compiler errors w/ std::variant are atrocious.
+ * One also finds that compiler errors dealing with std::variant are atrocious!
+ *
+ * REQUIREMENTS:
+ *
+ * This interpreter uses c++17's std::variant, and thus requires c++17.
+ * Additionally, it employs an extension, which will become standard in c++20,
+ *  to have the "auto" keyword legal in parameter declarations, as with lambdas.
+ *
+ * So, one must have a compiler supporting c++17, and this extension, or c++20.
+ *
+ * TODOs:
  *
  * There's still a lot to add, before this can be used for anything:
  * TODO: dot-cons-notation in input.
