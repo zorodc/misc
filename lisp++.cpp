@@ -371,14 +371,15 @@ lisp::Ptr lisp::Lexr (const lisp::Str& sexp)
 	auto conses = [&](size i, size& next) {
 		expect(i++, '('); /* Sanity check. */
 
-		lisp::Val  list = lisp::Nil;
-		lisp::Val* last = &list;
+		lisp::Ptr  list = lisp::Nil;
+		lisp::Ptr* last = &list;
 		for (size c = i; c < sexp.length(); skipws(c, c))
-			if   (sexp[c] == ')') { next = c+1; return std::get<Ptr>(list); }
+			if   (sexp[c] == ')') { next = c+1; return list; }
 			else {
-				*last = Val{lisp::Cons(expr(c, c), lisp::Nil)};
-				 last = &Cdr(std::get<Ptr>(*last));
+				*last = lisp::Cons(expr(c, c), lisp::Nil);
+				 last = &std::get<Ptr>(lisp::Cdr(* last));
 			}
+
 		throw lisp::exceptions::early_eofs{{sexp.c_str() + i, sexp.length()}};
 	};
 
