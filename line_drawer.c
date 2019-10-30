@@ -72,12 +72,12 @@ void draw_line (struct common_buffer* graph, struct line_coefficient slope) {
 
 #include <stdio.h>
 
-void fmtbuffer (struct common_buffer* buffer, FILE* os) {
+void fmtbuffer (struct common_buffer* buffer, FILE* outs) {
 	for (int y = 0; y < as_common(buffer)->how_high; ++y) {
 	for (int x = 0; x < as_common(buffer)->how_wide; ++x) {
 	     int d = as_common(buffer)->how_high - y - 1;
-		fputc(get_buffr(buffer)[d*as_common(buffer)->how_wide + x] + ' ', os);
-	}   fputc('\n', os); }
+		fputc(get_buffr(buffer)[d*as_common(buffer)->how_wide + x] + ' ', outs);
+	}   fputc('\n', outs); }
 }
 
 int main() {
