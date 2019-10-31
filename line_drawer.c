@@ -6,8 +6,8 @@
  */
 
 #define indexinto(bf, pt) (get_buffr(bf)[as_common(bf)->how_wide*(pt).y+(pt).x])
-#define as_common(Buffer)  ((struct buf_dimension*)(Buffer)         )
-#define get_buffr(Buffer) (((struct masked_buffer*)(Buffer))->buffer)
+#define as_common(BUFFER)  ((struct buf_dimension*)(BUFFER)         )
+#define get_buffr(BUFFER) (((struct masked_buffer*)(BUFFER))->buffer)
 
 #define add_slope(pt, ce) ((struct point) { (pt).x + (ce).lateral_growth,\
                                             (pt).y + (ce).upright_growth })
