@@ -5,7 +5,7 @@
  * I wrote this one sleepless morning, and liked it.
  */
 
-#define indexinto(bf, pt) get_buffr(bf)[as_common(bf)->how_wide*(pt).y+(pt).x]
+#define indexinto(bf, pt) get_buffr(bf)[as_common(bf)->how_wide*(pt).y + (pt).x]
 #define as_common(BUFFER)  ((struct buf_dimension*)(BUFFER)         )
 #define get_buffr(BUFFER) (((struct masked_buffer*)(BUFFER))->buffer)
 
